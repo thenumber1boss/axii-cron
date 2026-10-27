@@ -1,0 +1,55 @@
+# Axii scheduler. This repo contains ONLY this schedule; all app code lives in the private repo.
+# It calls two secret-protected endpoints on the Axii app:
+#   /api/meta/poll       pulls new leads from connected Meta lead forms
+#   /api/pipeline/tick   advances lead pipelines (drafts, waits, notifications)
+#
+# Repo secrets required (Settings > Secrets and variables > Actions):
+#   AXII_APP_URL   e.g. https://your-app.vercel.app   (no trailing slash)
+#   POLL_SECRET    the same value as POLL_SECRET in the app's environment
+name: Axii cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # GitHub may start runs several minutes late; that is fine for this work
+  workflow_dispatch: {}
+
+permissions: {}               # this workflow needs no access to this repo
+
+concurrency:
+  group: axii-cron
+  cancel-in-progress: false
+
+jobs:
+  meta-poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Poll Meta lead forms
+        env:
+          APP_URL: ${{ secrets.AXII_APP_URL }}
+          SECRET: ${{ secrets.POLL_SECRET }}
+        run: |
+          set -u
+          curl --silent --show-error --fail-with-body --max-time 90 \
+            --retry 2 --retry-delay 10 --retry-all-errors \
+            -X POST "$APP_URL/api/meta/poll" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json"
+          echo
+
+  pipeline-tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Advance pipelines
+        env:
+          APP_URL: ${{ secrets.AXII_APP_URL }}
+          SECRET: ${{ secrets.POLL_SECRET }}
+        run: |
+          set -u
+          curl --silent --show-error --fail-with-body --max-time 90 \
+            --retry 2 --retry-delay 10 --retry-all-errors \
+            -X POST "$APP_URL/api/pipeline/tick" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json"
+          echo
